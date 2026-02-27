@@ -323,6 +323,10 @@ else
 endif
 accelerator_targets += { 'CONFIG_XEN': xen_targets }
 
+if cpu == 'aarch64' and get_option('hmv').allowed()
+  accelerator_targets += { 'CONFIG_HMV': ['aarch64-softmmu'] }
+endif
+
 if cpu == 'aarch64'
   accelerator_targets += {
     'CONFIG_HVF': ['aarch64-softmmu']
@@ -881,6 +885,10 @@ endif
 accelerators = []
 if get_option('kvm').allowed() and host_os == 'linux'
   accelerators += 'CONFIG_KVM'
+endif
+
+if get_option('hmv').allowed() and host_os == 'linux' and cpu == 'aarch64'
+  accelerators += 'CONFIG_HMV'
 endif
 
 if get_option('mshv').allowed() and host_os == 'linux'
@@ -4355,6 +4363,9 @@ foreach target : target_dirs
     arch_deps += src.dependencies()
   endif
 
+  if target == 'aarch64-softmmu'
+    message('Applying specific_ss for aarch64-softmmu, CONFIG_HMV is: ' + config_target.get('CONFIG_HMV', 'NOT FOUND'))
+  endif
   target_specific = specific_ss.apply(config_target, strict: false)
   arch_srcs += target_specific.sources()
   arch_deps += target_specific.dependencies()
@@ -4441,6 +4452,17 @@ foreach target : target_dirs
                link_depends: [block_syms, qemu_syms],
                link_args: link_args)
     single_binary_libs += emulator
+
+    # Also build a standalone executable (ELF) that links against the .so
+    if host_os != 'darwin'
+      executable(exe_name + '-elf',
+               install: true,
+               c_args: c_args,
+               dependencies: arch_deps + exe['dependencies'],
+               objects: lib.extract_all_objects(recursive: true),
+               link_depends: [block_syms, qemu_syms],
+               link_args: link_args)
+    endif
 
     if host_os == 'darwin'
       icon = 'pc-bios/qemu.rsrc'
@@ -4795,6 +4817,7 @@ endif
 summary_info = {}
 if have_system
   summary_info += {'KVM support':       config_all_accel.has_key('CONFIG_KVM')}
+  summary_info += {'HMV support':       config_all_accel.has_key('CONFIG_HMV')}
   summary_info += {'HVF support':       config_all_accel.has_key('CONFIG_HVF')}
   summary_info += {'WHPX support':      config_all_accel.has_key('CONFIG_WHPX')}
   summary_info += {'NVMM support':      config_all_accel.has_key('CONFIG_NVMM')}
